@@ -136,7 +136,7 @@
     });
   })();
 
-  /* ---------- Enquiry form: no server. It opens the visitor's email app with everything filled in. ---------- */
+  /* ---------- Enquiry form: sends straight to Jordan's inbox via FormSubmit (formsubmit.co). Falls back to email app if the send fails. ---------- */
   (function(){
     var form = document.querySelector('form.enquiry');
     if(!form){ return; }
@@ -162,9 +162,29 @@
       ];
       var subject = 'Website enquiry: ' + role + ', ' + v('name');
       var href = 'mailto:jordan@rosevari.com?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(lines.join('\n'));
-      status.className = 'status ok';
-      status.textContent = 'Your email app should open now with the message written. Press send there. Nothing opened? Email jordan@rosevari.com.';
-      window.location.href = href;
+      if(form.elements._honey && form.elements._honey.value){ status.className = 'status ok'; status.textContent = 'Sent. Jordan will be in touch.'; form.reset(); return; }
+      var btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true; var label = btn.textContent; btn.textContent = 'Sending...';
+      status.className = 'status'; status.textContent = 'Sending your enquiry...';
+      fetch('https://formsubmit.co/ajax/jordan@rosevari.com', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({
+          _subject: subject, _template: 'table', _captcha: 'false', _replyto: v('email') || undefined,
+          name: v('name'), role: role, email: v('email') || 'not given', phone: v('phone') || 'not given',
+          property: v('property') || 'not given', message: v('message') || '(no message)'
+        })
+      }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
+      .then(function(res){
+        if(!res.ok || String(res.d.success) !== 'true'){ throw new Error(res.d.message || 'send failed'); }
+        status.className = 'status ok';
+        status.textContent = 'Sent. Thanks ' + v('name').split(' ')[0] + ', Jordan will get back to you soon.';
+        form.reset(); btn.textContent = 'Sent';
+      }).catch(function(){
+        status.className = 'status err';
+        status.innerHTML = 'That did not send. Please <a href="' + href.replace(/"/g, '&quot;') + '">email jordan@rosevari.com</a> instead.';
+        btn.disabled = false; btn.textContent = label;
+      });
     });
   })();
 })();
